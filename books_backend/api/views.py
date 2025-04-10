@@ -7,8 +7,14 @@ import numpy as np
 import logging
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
+from .serializers import UserSerializer, BookSerializer
+from rest_framework.generics import ListAPIView
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters
 from .models import Book
-from .serializers import UserSerializer, BookSerializer  # Убедитесь, что BookSerializer существует
+from .filters import BookFilter
+from rest_framework import generics
+
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +107,6 @@ class RegisterView(APIView):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 class LoginView(APIView):
     authentication_classes = []  # Отключаем аутентификацию для входа
     permission_classes = [permissions.AllowAny]  # Разрешаем доступ всем
@@ -120,7 +125,6 @@ class LoginView(APIView):
             {'error': 'Invalid credentials'},
             status=status.HTTP_401_UNAUTHORIZED
         )
-
 
 class FavoriteView(APIView):
     permission_classes = [permissions.IsAuthenticated]  # Требуем аутентификацию
@@ -152,3 +156,26 @@ class FavoriteView(APIView):
                 {'error': 'Book not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class BookListAPIView(ListAPIView):
+    queryset = Book.objects.all()
+    serializer_class = BookSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_class = BookFilter
+    ordering_fields = ['title', 'authors', 'publish_year']
+    ordering = ['title']
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+
+        # Добавляем список жанров в ответ
+        if not request.query_params:  # Только при первом запросе без фильтров
+            books = Book.objects.exclude(category__isnull=True).exclude(category__exact='')
+            genres = set()
+            for book in books:
+                if book.category:
+                    genres.update([g.strip() for g in book.category.split(',') if g.strip()])
+            response.data['genres'] = sorted(genres)
+
+        return response

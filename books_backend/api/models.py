@@ -1,42 +1,24 @@
 from django.db import models
+from django.contrib.auth.models import AbstractUser
 
 
 class Book(models.Model):
     # Required fields
-    title = models.CharField(
-        max_length=500,
-        verbose_name='Title',
-        help_text='Required field'
-    )
-    authors = models.CharField(
-        max_length=500,
-        verbose_name='Author',
-        help_text='Required field'
-    )
-    description = models.TextField(
-        verbose_name='Description',
-        help_text='Required field'
-    )
-    tags = models.CharField(
-        max_length=500,
-        verbose_name='Genres/Tags',
-        help_text='Required field. Separate with commas'
-    )
+    title = models.CharField(max_length=500, verbose_name='Title', help_text='Required field')
+    authors = models.CharField(max_length=500, verbose_name='Author', help_text='Required field')
+    description = models.TextField(verbose_name='Description', help_text='Required field')
+    tags = models.CharField(max_length=500, verbose_name='Tags', help_text='Required field')
 
     # Optional fields
-    original_id = models.IntegerField(
-        null=True,
-        blank=True,
-        unique=True,
-        verbose_name='Original ID',
-        help_text='Optional field'
-    )
-    embedding = models.BinaryField(
-        null=True,
-        blank=True,
-        verbose_name='Vector representation',
-        help_text='For recommendation system'
-    )
+    original_id = models.IntegerField(null=True, blank=True, unique=True, verbose_name='Original ID', help_text='Optional field')
+    embedding = models.BinaryField(null=True, blank=True, verbose_name='Vector representation', help_text='For recommendation system')
+
+    # New fields
+    category = models.CharField(max_length=255, null=True, blank=True)
+    publisher = models.CharField(max_length=255, null=True, blank=True, verbose_name='Publisher', help_text='Optional field')
+    price_starting = models.FloatField(null=True, blank=True, verbose_name='Price Starting With ($)', help_text='Optional field')
+    publish_month = models.IntegerField(null=True, blank=True, verbose_name='Publish Date (Month)', help_text='Optional field')
+    publish_year = models.IntegerField(null=True, blank=True, verbose_name='Publish Date (Year)', help_text='Optional field')
 
     def __str__(self):
         return f"{self.title} - {self.authors}"
@@ -45,10 +27,6 @@ class Book(models.Model):
         db_table = 'api_book'
         verbose_name = 'Book'
         verbose_name_plural = 'Books'
-
-
-from django.contrib.auth.models import AbstractUser
-from django.db import models
 
 
 class User(AbstractUser):

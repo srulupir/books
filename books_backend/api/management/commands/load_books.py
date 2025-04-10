@@ -18,6 +18,18 @@ class Command(BaseCommand):
             help='Number of books to process in each batch'
         )
 
+    def _safe_float(self, value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _safe_int(self, value):
+        try:
+            return int(float(value))  # иногда приходит как '12.0'
+        except (TypeError, ValueError):
+            return None
+
     def handle(self, *args, **options):
         # Paths setup
         data_dir = settings.BASE_DIR / 'data'
@@ -46,7 +58,7 @@ class Command(BaseCommand):
             )
 
         # Check required columns
-        required_columns = ['Title', 'Description', 'tags']
+        required_columns = ['Title', 'Description', 'Category']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
             raise ValueError(f"CSV missing required columns: {missing_columns}")
@@ -72,8 +84,14 @@ class Command(BaseCommand):
                             authors=row.get('Authors', 'Unknown Author'),
                             description=row['Description'],
                             tags=row['tags'],
-                            embedding=embeddings[idx].tobytes()
+                            embedding=embeddings[idx].tobytes(),
+                            category=row['Category'],
+                            publisher=row.get('Publisher'),
+                            price_starting=self._safe_float(row.get('Price Starting With ($)')),
+                            publish_month=self._safe_int(row.get('Publish Date (Month)')),
+                            publish_year=self._safe_int(row.get('Publish Date (Year)'))
                         ))
+
                     except Exception as e:
                         self.stdout.write(self.style.ERROR(
                             f"Error on row {idx}: {str(e)}"

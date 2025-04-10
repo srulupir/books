@@ -1,11 +1,34 @@
 from rest_framework import serializers
-from .models import User, Book, UserBookFavorite
+from .models import Book, User, UserBookFavorite
 
 
 class BookSerializer(serializers.ModelSerializer):
+    # Преобразуем категории в список для удобства фронтенда
+    categories = serializers.SerializerMethodField()
+
+    def get_categories(self, obj):
+        # Разделяем категории по запятой и возвращаем их как список
+        return [c.strip() for c in obj.category.split(',') if c.strip()]
+
     class Meta:
         model = Book
-        fields = '__all__'
+        fields = [
+            'id',
+            'title',
+            'authors',
+            'description',
+            'tags',
+            'category',
+            'categories',  # добавляем поле категорий как список
+            'publisher',
+            'price_starting',
+            'publish_year',
+            'publish_month'
+        ]
+        # Исключаем embedding и другие технические поля
+        extra_kwargs = {
+            'embedding': {'write_only': True}
+        }
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -22,7 +45,6 @@ class UserSerializer(serializers.ModelSerializer):
             password=validated_data['password']
         )
         return user
-
 
 class FavoriteSerializer(serializers.ModelSerializer):
     book = BookSerializer()
