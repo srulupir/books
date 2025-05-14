@@ -11,49 +11,48 @@ import {
 } from '@mui/material';
 import FilterListIcon from '@mui/icons-material/FilterList';
 
-const BookFilters = ({ genres = [], onFilter }) => {
-    const [selectedGenres, setSelectedGenres] = useState([]);
-    const [yearRange, setYearRange] = useState([1900, new Date().getFullYear()]);
-    const [authorQuery, setAuthorQuery] = useState('');
-    const [filtersOpen, setFiltersOpen] = useState(false);
+const BookFilters = ({ genres = [], onFilter, onReset, disabled }) => {
+    const [open, setOpen] = useState(false);
+    const [localFilters, setLocalFilters] = useState({
+        category: [],
+        author: '',
+        year_from: 1900,
+        year_to: new Date().getFullYear()
+    });
 
-    const handleApplyFilters = () => {
+    const handleApply = () => {
         onFilter({
-            category: selectedGenres.join(','),
-            author: authorQuery,
-            year_from: yearRange[0],
-            year_to: yearRange[1]
+            category: localFilters.category.join(','),
+            author: localFilters.author,
+            year_from: localFilters.year_from,
+            year_to: localFilters.year_to
         });
-        setFiltersOpen(false);
+        setOpen(false);
     };
 
-    const handleResetFilters = () => {
-        setSelectedGenres([]);
-        setYearRange([1900, new Date().getFullYear()]);
-        setAuthorQuery('');
-        onFilter({});
-        setFiltersOpen(false);
+    const handleReset = () => {
+        setLocalFilters({
+            category: [],
+            author: '',
+            year_from: 1900,
+            year_to: new Date().getFullYear()
+        });
+        onReset();
+        setOpen(false);
     };
 
     return (
-        <Box sx={{ mb: 3 }}>
+        <Box>
             <Button
                 startIcon={<FilterListIcon />}
-                onClick={() => setFiltersOpen(!filtersOpen)}
-                sx={{ mb: 2 }}
+                onClick={() => setOpen(!open)}
+                disabled={disabled}
             >
                 Фильтры
             </Button>
 
-            <Collapse in={filtersOpen}>
-                <Box
-                    sx={{
-                        p: 3,
-                        border: '1px solid #ddd',
-                        borderRadius: 1,
-                        bgcolor: 'background.paper'
-                    }}
-                >
+            <Collapse in={open}>
+                <Box sx={{ p: 3, border: '1px solid #ddd', borderRadius: 1, mt: 1 }}>
                     <Typography variant="h6" gutterBottom>Жанры</Typography>
                     <Box sx={{ maxHeight: 200, overflow: 'auto', mb: 3 }}>
                         {genres.map(genre => (
@@ -61,12 +60,14 @@ const BookFilters = ({ genres = [], onFilter }) => {
                                 key={genre}
                                 control={
                                     <Checkbox
-                                        checked={selectedGenres.includes(genre)}
-                                        onChange={() => setSelectedGenres(prev =>
-                                            prev.includes(genre)
-                                                ? prev.filter(g => g !== genre)
-                                                : [...prev, genre]
-                                        )}
+                                        checked={localFilters.category.includes(genre)}
+                                        onChange={() => setLocalFilters(prev => ({
+                                            ...prev,
+                                            category: prev.category.includes(genre)
+                                                ? prev.category.filter(g => g !== genre)
+                                                : [...prev.category, genre]
+                                        }))}
+                                        disabled={disabled}
                                     />
                                 }
                                 label={genre}
@@ -76,34 +77,44 @@ const BookFilters = ({ genres = [], onFilter }) => {
 
                     <Typography variant="h6" gutterBottom>Год выпуска</Typography>
                     <Slider
-                        value={yearRange}
-                        onChange={(e, newValue) => setYearRange(newValue)}
+                        value={[localFilters.year_from, localFilters.year_to]}
+                        onChange={(_, newValue) => setLocalFilters(prev => ({
+                            ...prev,
+                            year_from: newValue[0],
+                            year_to: newValue[1]
+                        }))}
                         valueLabelDisplay="auto"
                         min={1900}
                         max={new Date().getFullYear()}
                         sx={{ mb: 3 }}
+                        disabled={disabled}
                     />
 
                     <Typography variant="h6" gutterBottom>Автор</Typography>
                     <TextField
                         fullWidth
                         variant="outlined"
-                        placeholder="Введите имя автора"
-                        value={authorQuery}
-                        onChange={(e) => setAuthorQuery(e.target.value)}
+                        value={localFilters.author}
+                        onChange={(e) => setLocalFilters(prev => ({
+                            ...prev,
+                            author: e.target.value
+                        }))}
                         sx={{ mb: 3 }}
+                        disabled={disabled}
                     />
 
                     <Box sx={{ display: 'flex', gap: 2 }}>
                         <Button
                             variant="contained"
-                            onClick={handleApplyFilters}
+                            onClick={handleApply}
+                            disabled={disabled}
                         >
                             Применить
                         </Button>
                         <Button
                             variant="outlined"
-                            onClick={handleResetFilters}
+                            onClick={handleReset}
+                            disabled={disabled}
                         >
                             Сбросить
                         </Button>

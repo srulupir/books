@@ -7,7 +7,6 @@ import {
     Pagination,
     TextField,
     Container,
-    Button,
     Typography,
     Snackbar,
     Alert
@@ -19,222 +18,185 @@ import BookCard from './BookCard';
 const BookList = () => {
     const [books, setBooks] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [favoritesLoading, setFavoritesLoading] = useState(false);
-    const [error, setError] = useState(null);
+    const [filters, setFilters] = useState({
+        search: '',
+        category: '',
+        author: '',
+        year_from: null,
+        year_to: null
+    });
     const [page, setPage] = useState(1);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [filters, setFilters] = useState({});
     const [favorites, setFavorites] = useState(new Set());
     const [genres, setGenres] = useState([]);
     const [snackbar, setSnackbar] = useState(null);
     const { user } = useContext(AuthContext);
     const itemsPerPage = 8;
 
-    // Настройка axios для авторизации
+    // Настройка axios
     useEffect(() => {
-        const requestInterceptor = axios.interceptors.request.use(config => {
+        const interceptor = axios.interceptors.request.use(config => {
             const token = localStorage.getItem('access_token');
-            if (token) {
-                config.headers.Authorization = `Bearer ${token}`;
-            }
+            if (token) config.headers.Authorization = `Bearer ${token}`;
             return config;
         });
-
-        return () => {
-            axios.interceptors.request.eject(requestInterceptor);
-        };
+        return () => axios.interceptors.request.eject(interceptor);
     }, []);
 
-    // Загрузка книг
-    const fetchBooks = useCallback(async () => {
+    // Извлечение жанров из списка книг
+    const extractGenres = (books) => {
+        const genreSet = new Set();
+        books.forEach(book => {
+            if (book.category) {
+                book.category.split(',').forEach(g => {
+                    const trimmed = g.trim();
+                    if (trimmed) genreSet.add(trimmed);
+                });
+            }
+        });
+        return Array.from(genreSet).sort();
+    };
+
+    // Загрузка данных
+    const fetchData = useCallback(async () => {
         try {
             setLoading(true);
-            const response = await axios.get('/api/books/', { params: filters });
-            setBooks(response.data.results || response.data);
-            setGenres(response.data.genres || []);
+
+            const params = Object.fromEntries(
+                Object.entries(filters).filter(([_, v]) => v !== '' && v !== null)
+            );
+
+            const [booksRes, favoritesRes] = await Promise.all([
+                axios.get('/api/books/', { params }),
+                user ? axios.get('/api/favorites/') : Promise.resolve({ data: [] })
+            ]);
+
+            const loadedBooks = booksRes.data.results || booksRes.data;
+            setBooks(loadedBooks);
+            setFavorites(new Set(favoritesRes.data.map(fav => fav.book.id)));
+
+            // Обновляем список жанров
+            if (!params.category) { // Только если не фильтруем по жанру
+                setGenres(extractGenres(loadedBooks));
+            }
         } catch (err) {
-            console.error('Error loading books:', err);
-            setError('Не удалось загрузить книги');
-            setSnackbar({ message: 'Ошибка загрузки книг', severity: 'error' });
+            console.error('Ошибка загрузки:', err);
+            setSnackbar({ message: 'Ошибка загрузки данных', severity: 'error' });
         } finally {
             setLoading(false);
         }
-    }, [filters]);
+    }, [filters, user]);
 
-    
-    // Загрузка избранного
-    const fetchFavorites = useCallback(async () => {
-        if (!user) {
-            setFavorites(new Set());
-            return;
-        }
-
-        try {
-            setFavoritesLoading(true);
-            const response = await axios.get('/api/favorites/');
-            setFavorites(new Set(response.data.map(fav => fav.book.id)));
-        } catch (err) {
-            console.error('Error loading favorites:', err);
-            setSnackbar({ message: 'Ошибка загрузки избранного', severity: 'error' });
-        } finally {
-            setFavoritesLoading(false);
-        }
-    }, [user]);
-
-    // Первоначальная загрузка данных
     useEffect(() => {
-        const loadData = async () => {
-            await fetchBooks();
-            await fetchFavorites();
-        };
-        loadData();
-    }, [fetchBooks, fetchFavorites]);
+        fetchData();
+    }, [fetchData]);
 
-    // Обработчик избранного
+    // Обработчики
+    const handleSearch = (e) => {
+        const value = e.target.value;
+        setFilters(prev => ({ ...prev, search: value }));
+        setPage(1);
+    };
+
+    const handleFilterChange = (newFilters) => {
+        setFilters(prev => ({ ...prev, ...newFilters }));
+        setPage(1);
+    };
+
+    const handleResetFilters = () => {
+        setFilters({
+            search: '',
+            category: '',
+            author: '',
+            year_from: null,
+            year_to: null
+        });
+        setPage(1);
+    };
+
     const handleFavoriteToggle = async (bookId) => {
         if (!user) {
-            setSnackbar({
-                message: 'Для добавления в избранное требуется авторизация',
-                severity: 'warning'
-            });
+            setSnackbar({ message: 'Требуется авторизация', severity: 'warning' });
             return;
         }
 
         try {
-            const newFavorites = new Set(favorites);
+            const isFavorite = favorites.has(bookId);
+            const method = isFavorite ? 'delete' : 'post';
+            const url = isFavorite ? `/api/favorites/${bookId}/` : '/api/favorites/';
 
-            if (newFavorites.has(bookId)) {
-                await axios.delete(`/api/favorites/${bookId}/`);
-                newFavorites.delete(bookId);
-                setSnackbar({ message: 'Удалено из избранного', severity: 'info' });
-            } else {
-                await axios.post('/api/favorites/', { book_id: bookId });
-                newFavorites.add(bookId);
-                setSnackbar({ message: 'Добавлено в избранное', severity: 'success' });
-            }
+            await axios[method](url, isFavorite ? null : { book_id: bookId });
 
-            setFavorites(newFavorites);
-        } catch (err) {
-            console.error('Favorite update error:', err);
+            setFavorites(prev => {
+                const newFavorites = new Set(prev);
+                isFavorite ? newFavorites.delete(bookId) : newFavorites.add(bookId);
+                return newFavorites;
+            });
+
             setSnackbar({
-                message: err.response?.data?.detail || 'Ошибка при обновлении избранного',
+                message: isFavorite ? 'Удалено из избранного' : 'Добавлено в избранное',
+                severity: 'success'
+            });
+        } catch (err) {
+            setSnackbar({
+                message: err.response?.data?.detail || 'Ошибка операции',
                 severity: 'error'
             });
         }
     };
 
-    // Обработчик поиска
-    const handleSearch = (e) => {
-        setSearchTerm(e.target.value);
-        setPage(1);
-    };
-
-    // Обработчик фильтров
-    const handleFilterChange = (newFilters) => {
-        setFilters(newFilters);
-        setPage(1);
-    };
-
-    // Обработчик сброса фильтров
-    const handleResetFilters = () => {
-        setFilters({});
-        setSearchTerm('');
-        setPage(1);
-    };
-
-    // Фильтрация книг
-    const filteredBooks = books.filter(book => {
-        const searchLower = searchTerm.toLowerCase();
-        return (
-            book.title.toLowerCase().includes(searchLower) ||
-            (book.authors && book.authors.toLowerCase().includes(searchLower))
-        );
-    });
-
-    const pageCount = Math.ceil(filteredBooks.length / itemsPerPage);
-    const isLoading = loading || favoritesLoading;
-
-    // Закрытие уведомления
-    const handleCloseSnackbar = () => {
-        setSnackbar(null);
-    };
-
-    // Рендер состояний
-    if (error) {
-        return (
-            <Container maxWidth="md" sx={{ mt: 4, textAlign: 'center' }}>
-                <Typography color="error" variant="h6" gutterBottom>
-                    {error}
-                </Typography>
-                <Button
-                    variant="contained"
-                    onClick={() => {
-                        setError(null);
-                        fetchBooks();
-                        fetchFavorites();
-                    }}
-                    sx={{ mt: 2 }}
-                >
-                    Попробовать снова
-                </Button>
-            </Container>
-        );
-    }
+    // Пагинация
+    const pageCount = Math.ceil(books.length / itemsPerPage);
+    const paginatedBooks = books.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
     return (
         <Container maxWidth="lg" sx={{ py: 4 }}>
             {/* Поиск и фильтры */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+            <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
                 <TextField
                     label="Поиск книг"
                     variant="outlined"
                     size="small"
-                    value={searchTerm}
+                    value={filters.search}
                     onChange={handleSearch}
-                    sx={{ width: 300, flexShrink: 0 }}
-                    disabled={isLoading}
+                    sx={{ width: 300 }}
+                    disabled={loading}
                 />
-
                 <BookFilters
                     genres={genres}
-                    filters={filters}
-                    onFilterChange={handleFilterChange}
+                    onFilter={handleFilterChange}
                     onReset={handleResetFilters}
-                    disabled={isLoading}
+                    disabled={loading}
                 />
             </Box>
 
             {/* Загрузка */}
-            {isLoading && (
+            {loading && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
                     <CircularProgress />
                 </Box>
             )}
 
             {/* Результаты */}
-            {!isLoading && (
+            {!loading && (
                 <>
-                    {filteredBooks.length === 0 ? (
+                    {books.length === 0 ? (
                         <Typography variant="h6" align="center" sx={{ mt: 4 }}>
-                            {searchTerm || Object.values(filters).some(Boolean)
+                            {Object.values(filters).some(Boolean)
                                 ? 'По вашему запросу ничего не найдено'
                                 : 'Список книг пуст'}
                         </Typography>
                     ) : (
                         <>
                             <Grid container spacing={3}>
-                                {filteredBooks
-                                    .slice((page - 1) * itemsPerPage, page * itemsPerPage)
-                                    .map(book => (
-                                        <Grid item xs={12} sm={6} md={4} lg={3} key={book.id}>
-                                            <BookCard
-                                                book={book}
-                                                isFavorite={favorites.has(book.id)}
-                                                onFavoriteToggle={handleFavoriteToggle}
-                                                isLoading={favoritesLoading}
-                                            />
-                                        </Grid>
-                                    ))}
+                                {paginatedBooks.map(book => (
+                                    <Grid item xs={12} sm={6} md={4} lg={3} key={book.id}>
+                                        <BookCard
+                                            book={book}
+                                            isFavorite={favorites.has(book.id)}
+                                            onFavoriteToggle={handleFavoriteToggle}
+                                        />
+                                    </Grid>
+                                ))}
                             </Grid>
 
                             {pageCount > 1 && (
@@ -244,7 +206,7 @@ const BookList = () => {
                                         page={page}
                                         onChange={(_, value) => setPage(value)}
                                         color="primary"
-                                        disabled={isLoading}
+                                        disabled={loading}
                                     />
                                 </Box>
                             )}
@@ -257,14 +219,10 @@ const BookList = () => {
             <Snackbar
                 open={!!snackbar}
                 autoHideDuration={6000}
-                onClose={handleCloseSnackbar}
+                onClose={() => setSnackbar(null)}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
             >
-                <Alert
-                    onClose={handleCloseSnackbar}
-                    severity={snackbar?.severity}
-                    sx={{ width: '100%' }}
-                >
+                <Alert severity={snackbar?.severity}>
                     {snackbar?.message}
                 </Alert>
             </Snackbar>
