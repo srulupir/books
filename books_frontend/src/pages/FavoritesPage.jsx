@@ -1,38 +1,35 @@
-import React, { useState, useEffect, useContext } from 'react';
-import {
-    Grid,
-    Card,
-    Typography,
-    Container,
-    CircularProgress,
-    Button,
-    Box
-} from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
-import { AuthContext } from '../context/AuthContext';
-import BookCard from '../components/book/BookCard'; // Импортируем ваш компонент карточки книги
+import { useNavigate } from 'react-router-dom';
+import BookCard from '../components/book/BookCard';
+import { Grid, Typography, Container, CircularProgress, Box, Button, Paper, Chip, Stack } from '@mui/material';
 
 const FavoritesPage = () => {
+    const { user } = useAuth();
     const [favorites, setFavorites] = useState([]);
     const [loading, setLoading] = useState(true);
-    const { user } = useContext(AuthContext);
+
+    const [recLoading, setRecLoading] = useState(false);
+    const [recommendations, setRecommendations] = useState([]);
+
+    const [similarRecLoading, setSimilarRecLoading] = useState(false);
+    const [similarRecommendations, setSimilarRecommendations] = useState([]);
+
     const navigate = useNavigate();
 
     useEffect(() => {
         const fetchFavorites = async () => {
-            if (!user) return;
+            if (!user) {
+                navigate('/auth');
+                return;
+            }
 
             try {
-                setLoading(true);
                 const { data } = await axios.get('/api/favorites/');
-                setFavorites(data);
+                setFavorites(data || []);
             } catch (error) {
-                console.error('Error fetching favorites:', error);
-                if (error.response?.status === 401) {
-                    // Перенаправляем на страницу входа если не авторизован
-                    navigate('/login');
-                }
+                console.error('Ошибка загрузки избранного:', error);
             } finally {
                 setLoading(false);
             }
@@ -41,39 +38,41 @@ const FavoritesPage = () => {
         fetchFavorites();
     }, [user, navigate]);
 
-    const handleRemoveFavorite = async (bookId) => {
+    const getRecommendations = async () => {
+        if (favorites.length === 0) return;
+
         try {
-            await axios.delete(`/api/favorites/${bookId}/`);
-            setFavorites(favorites.filter(book => book.id !== bookId));
+            setRecLoading(true);
+            const { data } = await axios.post('/api/favorites/recommendations/');
+            setRecommendations(data.recommendations || []);
         } catch (error) {
-            console.error('Error removing favorite:', error);
+            console.error('Ошибка получения рекомендаций:', error);
+        } finally {
+            setRecLoading(false);
         }
     };
 
-    if (!user) {
-        return (
-            <Container maxWidth="sm" sx={{ textAlign: 'center', mt: 4 }}>
-                <Typography variant="h5" gutterBottom>
-                    Для просмотра избранного необходимо авторизоваться
-                </Typography>
-                <Button
-                    variant="contained"
-                    onClick={() => navigate('/login')}
-                    sx={{ mt: 2 }}
-                >
-                    Войти
-                </Button>
-            </Container>
-        );
-    }
+    // Новая функция для рекомендаций по похожим пользователям
+    const getSimilarRecommendations = async () => {
+        try {
+            setSimilarRecLoading(true);
+            const { data } = await axios.get('/api/recommendations/similar/');
+            setSimilarRecommendations(data.recommendations || []);
+        } catch (error) {
+            console.error('Ошибка получения похожих рекомендаций:', error);
+        } finally {
+            setSimilarRecLoading(false);
+        }
+    };
 
-    if (loading) {
-        return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-                <CircularProgress />
-            </Box>
-        );
-    }
+    const handleRemoveFavorite = async (bookId) => {
+        try {
+            await axios.delete(`/api/favorites/${bookId}/`);
+            setFavorites(favorites.filter((book) => book.id !== bookId));
+        } catch (error) {
+            console.error('Ошибка удаления из избранного:', error);
+        }
+    };
 
     return (
         <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -81,40 +80,115 @@ const FavoritesPage = () => {
                 Мои избранные книги
             </Typography>
 
-            {favorites.length > 0 ? (
-                <Grid container spacing={3}>
-                    {favorites.map(book => (
-                        <Grid item xs={12} sm={6} md={4} key={book.id}>
-                            <BookCard
-                                book={book}
-                                isFavorite={true}
-                                onFavoriteToggle={handleRemoveFavorite}
-                            />
-                        </Grid>
-                    ))}
-                </Grid>
-            ) : (
-                <Box sx={{
-                    textAlign: 'center',
-                    p: 4,
-                    border: '1px dashed',
-                    borderColor: 'divider',
-                    borderRadius: 2
-                }}>
-                    <Typography variant="h6" gutterBottom>
-                        Ваш список избранного пуст
-                    </Typography>
-                    <Typography variant="body1" color="text.secondary">
-                        Добавляйте книги в избранное, нажимая на значок ♡ в каталоге
-                    </Typography>
-                    <Button
-                        variant="outlined"
-                        sx={{ mt: 2 }}
-                        onClick={() => navigate('/books')}
-                    >
-                        Перейти к каталогу
-                    </Button>
+            {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                    <CircularProgress />
                 </Box>
+            ) : (
+                <>
+                    <Grid container spacing={3}>
+                        {favorites.length > 0 ? (
+                            favorites.map((book) => (
+                                <Grid item xs={12} sm={6} md={4} key={book.id}>
+                                    <BookCard
+                                        book={book}
+                                        isFavorite={true}
+                                        onFavoriteToggle={handleRemoveFavorite}
+                                    />
+                                </Grid>
+                            ))
+                        ) : (
+                            <Typography>Ваш список избранного пуст</Typography>
+                        )}
+                    </Grid>
+
+                    {favorites.length > 0 && (
+                        <>
+                            {/* Блок рекомендаций на основе избранных книг */}
+                            <Box sx={{ mt: 4 }}>
+                                <Paper elevation={3} sx={{ p: 3 }}>
+                                    <Typography variant="h5">Рекомендации на основе ваших избранных книг</Typography>
+                                    <Button
+                                        variant="contained"
+                                        onClick={getRecommendations}
+                                        disabled={recLoading}
+                                        sx={{ mt: 2 }}
+                                    >
+                                        {recLoading ? <CircularProgress size={24} /> : 'Получить рекомендации'}
+                                    </Button>
+
+                                    {recommendations.length > 0 && (
+                                        <Grid container spacing={3} sx={{ mt: 2 }}>
+                                            {recommendations.map((book) => (
+                                                <Grid item xs={12} sm={6} md={4} key={book.id}>
+                                                    <Paper sx={{ p: 2 }}>
+                                                        <Typography variant="h6">{book.title}</Typography>
+                                                        <Typography variant="subtitle2" color="text.secondary">
+                                                            {book.authors}
+                                                        </Typography>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            {book.description?.slice(0, 100)}...
+                                                        </Typography>
+                                                        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                                            <Chip label={`Сходство: ${book.similarity}%`} color="primary" size="small" />
+                                                            {book.publish_year && (
+                                                                <Chip label={`Год: ${book.publish_year}`} variant="outlined" size="small" />
+                                                            )}
+                                                            {book.category && (
+                                                                <Chip label={book.category.split(',')[0]} variant="outlined" size="small" />
+                                                            )}
+                                                        </Stack>
+                                                    </Paper>
+                                                </Grid>
+                                            ))}
+                                        </Grid>
+                                    )}
+                                </Paper>
+                            </Box>
+
+                            {/* Новый блок рекомендаций на основе похожих пользователей */}
+                            <Box sx={{ mt: 4 }}>
+                                <Paper elevation={3} sx={{ p: 3 }}>
+                                    <Typography variant="h5">Вам также может понравиться (похожие пользователи)</Typography>
+                                    <Button
+                                        variant="contained"
+                                        onClick={getSimilarRecommendations}
+                                        disabled={similarRecLoading}
+                                        sx={{ mt: 2 }}
+                                    >
+                                        {similarRecLoading ? <CircularProgress size={24} /> : 'Получить рекомендации'}
+                                    </Button>
+
+                                    {similarRecommendations.length > 0 && (
+                                        <Grid container spacing={3} sx={{ mt: 2 }}>
+                                            {similarRecommendations.map((book) => (
+                                                <Grid item xs={12} sm={6} md={4} key={book.id}>
+                                                    <Paper sx={{ p: 2 }}>
+                                                        <Typography variant="h6">{book.title}</Typography>
+                                                        <Typography variant="subtitle2" color="text.secondary">
+                                                            {book.authors || 'Автор неизвестен'}
+                                                        </Typography>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            {book.description?.slice(0, 100)}...
+                                                        </Typography>
+                                                        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                                            {book.publish_year && (
+                                                                <Chip label={`Год: ${book.publish_year}`} variant="outlined" size="small" />
+                                                            )}
+                                                            {book.category && (
+                                                                <Chip label={book.category.split(',')[0]} variant="outlined" size="small" />
+                                                            )}
+                                                        </Stack>
+                                                    </Paper>
+                                                </Grid>
+                                            ))}
+                                        </Grid>
+                                    )}
+                                </Paper>
+                            </Box>
+                        </>
+                    )}
+                </>
             )}
         </Container>
     );

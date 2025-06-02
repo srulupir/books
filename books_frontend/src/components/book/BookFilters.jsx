@@ -48,12 +48,12 @@ const BookFilters = ({ genres = [], onFilter, onReset, disabled }) => {
                 onClick={() => setOpen(!open)}
                 disabled={disabled}
             >
-                Фильтры
+                Filters
             </Button>
 
             <Collapse in={open}>
                 <Box sx={{ p: 3, border: '1px solid #ddd', borderRadius: 1, mt: 1 }}>
-                    <Typography variant="h6" gutterBottom>Жанры</Typography>
+                    <Typography variant="h6" gutterBottom>Genres</Typography>
                     <Box sx={{ maxHeight: 200, overflow: 'auto', mb: 3 }}>
                         {genres.map(genre => (
                             <FormControlLabel
@@ -75,7 +75,7 @@ const BookFilters = ({ genres = [], onFilter, onReset, disabled }) => {
                         ))}
                     </Box>
 
-                    <Typography variant="h6" gutterBottom>Год выпуска</Typography>
+                    <Typography variant="h6" gutterBottom>Year of publish</Typography>
                     <Slider
                         value={[localFilters.year_from, localFilters.year_to]}
                         onChange={(_, newValue) => setLocalFilters(prev => ({
@@ -90,7 +90,7 @@ const BookFilters = ({ genres = [], onFilter, onReset, disabled }) => {
                         disabled={disabled}
                     />
 
-                    <Typography variant="h6" gutterBottom>Автор</Typography>
+                    <Typography variant="h6" gutterBottom>Author</Typography>
                     <TextField
                         fullWidth
                         variant="outlined"
@@ -109,14 +109,14 @@ const BookFilters = ({ genres = [], onFilter, onReset, disabled }) => {
                             onClick={handleApply}
                             disabled={disabled}
                         >
-                            Применить
+                            Apply
                         </Button>
                         <Button
                             variant="outlined"
                             onClick={handleReset}
                             disabled={disabled}
                         >
-                            Сбросить
+                            Reset
                         </Button>
                     </Box>
                 </Box>

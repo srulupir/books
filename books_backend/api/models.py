@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-
+from sentence_transformers import SentenceTransformer
 
 class Book(models.Model):
     # Required fields
@@ -27,6 +27,12 @@ class Book(models.Model):
         db_table = 'api_book'
         verbose_name = 'Book'
         verbose_name_plural = 'Books'
+
+    def save(self, *args, **kwargs):
+        if not self.embedding and self.description:
+            model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+            self.embedding = model.encode(self.description).tobytes()
+        super().save(*args, **kwargs)
 
 
 class User(AbstractUser):

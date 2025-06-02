@@ -1,16 +1,17 @@
-import { createContext, useState, useEffect, useCallback } from 'react';
+// src/context/AuthContext.jsx
+import { createContext, useState, useEffect, useCallback, useContext } from 'react';
 import axios from 'axios';
-import RegisterForm from "../components/auth/RegisterForm.jsx";
 
 export const AuthContext = createContext();
 
+// ✅ Хук для удобного использования контекста
+export const useAuth = () => useContext(AuthContext);
+
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
-    const [token, setToken] = useState(() => {
-        return localStorage.getItem('token');
-    });
+    const [token, setToken] = useState(() => localStorage.getItem('token'));
 
-    // Добавляем интерцептор для axios
+    // ✅ Добавляем интерцептор для axios
     useEffect(() => {
         const requestInterceptor = axios.interceptors.request.use(
             (config) => {
@@ -27,25 +28,28 @@ export const AuthProvider = ({ children }) => {
         };
     }, [token]);
 
+    // ✅ Функция загрузки информации о пользователе
     const fetchUser = useCallback(async () => {
         try {
-            // Используем существующий эндпоинт из Django (например, через /api/favorites/)
+            if (!token) return; // Без токена не грузим пользователя
+
             const response = await axios.get('/api/favorites/');
             setUser({
-                // Преобразуем ответ под вашу структуру пользователя
                 username: response.data?.[0]?.user?.username || 'Unknown'
             });
         } catch (err) {
             console.error('Failed to fetch user:', err);
             logout();
         }
-    }, []);
+    }, [token]);
 
+    // ✅ Вход пользователя
     const login = async (credentials) => {
         try {
             const { data } = await axios.post('/api/auth/login/', credentials);
             localStorage.setItem('token', data.access);
             setToken(data.access);
+            await fetchUser();
             return { success: true };
         } catch (error) {
             console.error('Login error:', error);
@@ -53,11 +57,13 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // ✅ Регистрация пользователя
     const register = async (userData) => {
         try {
             const { data } = await axios.post('/api/auth/register/', userData);
             localStorage.setItem('token', data.access);
             setToken(data.access);
+            await fetchUser();
             return { success: true };
         } catch (error) {
             console.error('Registration error:', error);
@@ -65,12 +71,14 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // ✅ Выход пользователя
     const logout = useCallback(() => {
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);
     }, []);
 
+    // ✅ Автоматическая загрузка пользователя при наличии токена
     useEffect(() => {
         if (token && !user) {
             fetchUser();
@@ -78,16 +86,8 @@ export const AuthProvider = ({ children }) => {
     }, [token, user, fetchUser]);
 
     return (
-        <AuthContext.Provider value={{
-            user,
-            token,
-            isAuthenticated: !!token,
-            login,
-            register,
-            logout
-        }}>
+        <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, login, register, logout }}>
             {children}
         </AuthContext.Provider>
     );
 };
-
