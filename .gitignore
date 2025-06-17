@@ -23,11 +23,6 @@ env/
 *.egg-info/
 *.swp
 .DS_Store
-data/book_index.*
-data/*.faiss
-data/*.json
-*.pth
-*.joblib
 
 # Node.js (React)
 node_modules/
